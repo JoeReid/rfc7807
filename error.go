@@ -6,6 +6,13 @@ import (
 	"net/http"
 )
 
+// Error is an implementation of RFC7807. It is a wrapper around an error that
+// provides a status code, type, and detail. It also allows for extra fields to
+// be added to the response.
+//
+// Error implements the error interface, so it can be used anywhere an error is
+// expected. It also implements json.Marshaler, so it can be marshaled to JSON
+// and written to the client, however, ErrorResponse should be used for this purpose.
 type Error struct {
 	Cause       error
 	Status      int
@@ -14,10 +21,12 @@ type Error struct {
 	ExtraFields map[string]interface{}
 }
 
+// Error returns a string representation of the error.
 func (e *Error) Error() string {
 	return fmt.Sprintf("%s %s: %s: %s", http.StatusText(e.Status), e.Type, e.Detail, e.Cause.Error())
 }
 
+// MarshalJSON marshals the error to JSON, popuilating zero values with sane defaults.
 func (e *Error) MarshalJSON() ([]byte, error) {
 	if e.Status == 0 {
 		e.Status = http.StatusInternalServerError
@@ -44,6 +53,15 @@ func (e *Error) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fields)
 }
 
+// ErrorResponse is a helper function to write an RFC7807 error response to the
+// client. If the error is not an RFC7807 error, it will be wrapped in one with
+// a status of 500 and a type of "unknown-error".
+//
+// If the error cannot be marshaled to JSON, a 500 will be returned with a
+// message indicating that the error could not be encoded.
+//
+// Once the function returns, the response will have been written to and the
+// request and callers should also return.
 func ErrorResponse(err error, w http.ResponseWriter, r *http.Request) {
 	rfcErr, ok := err.(*Error)
 	if !ok {
